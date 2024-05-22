@@ -2,6 +2,7 @@ import './App.css';
 import { useEffect, useState } from 'react';
 import { Graph } from 'react-d3-graph';
 import neo4j from "neo4j-driver";
+import * as d3 from 'd3-force';
 
 const MyGraphComponent = () => {
 
@@ -56,9 +57,20 @@ const MyGraphComponent = () => {
     const getData = async () => {
       const graphData = await fetchGraphData();
       setData(graphData);
+      console.log(graphData)
     };
     getData();
   }, []);
+
+  const getCustomLayout = () => {
+    const layout = d3.forceSimulation()
+        .force("charge", d3.forceManyBody().strength(-200)) // Repulsive force between nodes
+        .force("center", d3.forceCenter(window.innerWidth / 2, window.innerHeight / 2)) // Center the graph
+        .force("link", d3.forceLink().id(d => d.id).distance(100)) // Distance between linked nodes
+        .force("collide", d3.forceCollide().radius(50)); // Prevent node overlap
+
+    return layout;
+  };
 
   const myConfig = {
     nodeHighlightBehavior: true,
@@ -68,16 +80,32 @@ const MyGraphComponent = () => {
       highlightStrokeColor: 'blue'
     },
     link: {
-      highlightColor: 'lightblue'
+      highlightColor: 'lightblue',
+      //renderLabel: true,
+      strokeWidth: 1 // Set the stroke width for all links
+    },
+    d3: {
+      gravity: -100,
+      linkLength: 50,
+      forceSimulation: getCustomLayout()
     }
   };
 
   return (
       <div>
         <Graph
-            id="graph-id"
+            id="graph-id" // id is mandatory
             data={data}
             config={myConfig}
+            customLink={link => (
+                <path
+                    key={`link-${link.index}`}
+                    d={`M${link.source.x},${link.source.y} Q${(link.source.x + link.target.x) / 2},${(link.source.y + link.target.y) / 2} ${link.target.x},${link.target.y}`}
+                    fill="none"
+                    stroke="lightblue"
+                    strokeWidth={2}
+                />
+            )}
         />
       </div>
   );
@@ -85,9 +113,9 @@ const MyGraphComponent = () => {
 
 function App() {
   return (
-    <div className="App">
-     <MyGraphComponent/>
-    </div>
+      <div>
+        <MyGraphComponent/>
+      </div>
   );
 }
 
