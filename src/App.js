@@ -109,8 +109,8 @@ const MyGraphComponent = ({ query }) => {
       highlightStrokeColor: 'blue'
     },
     link: {
+      type: "CURVE_SMOOTH",
       highlightColor: 'darkblue',
-      //renderLabel: true,
       labelProperty: 'label',
       strokeWidth: 1
     },
@@ -121,11 +121,16 @@ const MyGraphComponent = ({ query }) => {
     }
   };
 
+
+  const onClickNode = (nodeId) => {
+    console.log(`Clicked node ${nodeId}`);
+  };
+
   const customLink = (link) => {
     const { source, target } = link;
     const path = d3.path();
     const controlPointX = (source.x + target.x) / 2;
-    const controlPointY = (source.y + target.y) / 2 - 10; // Adjust this value to control the curvature
+    const controlPointY = (source.y + target.y) / 2 - 10;
     path.moveTo(source.x, source.y);
     path.quadraticCurveTo(controlPointX, controlPointY, target.x, target.y);
 
@@ -141,12 +146,15 @@ const MyGraphComponent = ({ query }) => {
   };
 
   return (
-      <div>
+      <div style={{ width: '100vw', height: '100vh' }}>
         <Graph
             id="graph-id"
             data={data}
             config={myConfig}
             customLink={customLink}
+            width={window.innerWidth}
+            height={window.innerHeight}
+            onClickNode={onClickNode}
         />
       </div>
   );
@@ -171,7 +179,7 @@ function App() {
   };
 
   return (
-      <div>
+      <div style={{ width: '100vw', height: '100vh' }}>
         <input
             type="text"
             value={inputQuery}
