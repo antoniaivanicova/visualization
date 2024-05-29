@@ -75,6 +75,7 @@ const MyGraphComponent = ({ query }) => {
     getData();
   }, [query]);
 
+  console.log(data.links)
   const getCustomLayout = () => {
     const layout = d3Force.forceSimulation()
         .force('charge', d3Force.forceManyBody().strength(d => {
@@ -87,8 +88,8 @@ const MyGraphComponent = ({ query }) => {
           }
         }))
         .force('center', d3Force.forceCenter(window.innerWidth / 2, window.innerHeight / 2))
-        .force('link', d3Force.forceLink().id(d => d.id).distance(200))
-        .force('collide', d3Force.forceCollide().radius(50))
+        .force('link', d3Force.forceLink().id(d => d.id).distance(300))
+        .force('collide', d3Force.forceCollide().radius(40))
         .force('cluster', (alpha) => {
           data.nodes.forEach(node => {
             if (node.level === 'L2') {
@@ -104,17 +105,22 @@ const MyGraphComponent = ({ query }) => {
     return layout;
   };
 
+  //todo: change thickness
+  //todo: change the colors of the graph -> based on a category
   const myConfig = {
     nodeHighlightBehavior: true,
+    highlightOpacity: 0.2,
     collapsible: true,
     automaticRearrangeAfterDropNode: true,
-    panAndZoom: true,
+    panAndZoom: false,
+    highlightDegree: 2,
+    linkHighlightBehavior: true,
     staticGraph: false,
     focusZoom: 1,
     maxZoom: 12,
     minZoom: 0.05,
     node: {
-      color: 'lightblue',
+      color: 'red',
       size: 120,
       highlightStrokeColor: 'blue'
     },
@@ -122,7 +128,8 @@ const MyGraphComponent = ({ query }) => {
       type: "CURVE_SMOOTH",
       highlightColor: 'darkblue',
       labelProperty: 'label',
-      strokeWidth: 1
+      //strokeWidth: 1,
+      semanticStrokeWidth: true
     },
     d3: {
       gravity: -100,
