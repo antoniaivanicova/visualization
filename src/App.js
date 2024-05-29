@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { Graph } from 'react-d3-graph';
 import neo4j from 'neo4j-driver';
 import * as d3Force from 'd3-force';
-import * as d3 from 'd3';
 
 const MyGraphComponent = ({ query }) => {
   const driver = neo4j.driver(
@@ -27,6 +26,7 @@ const MyGraphComponent = ({ query }) => {
           const targetNode = record.get('m').properties;
           const targetName = record.get('m').properties.name;
           const relationship = record.get('r');
+          const thickness = relationship.properties.thickness?.low || relationship.properties.thickness;
 
           if (!levels.has(sourceName)) {
             levels.set(sourceName, 0);
@@ -42,7 +42,8 @@ const MyGraphComponent = ({ query }) => {
           links.push({
             source: sourceName,
             target: targetName,
-            label: relationship.type
+            label: relationship.type,
+            thickness: thickness
           });
         } else {
           if (!levels.has(sourceName)) {
@@ -63,6 +64,8 @@ const MyGraphComponent = ({ query }) => {
   };
 
   const [data, setData] = useState({ nodes: [], links: [] });
+  const [expandedNodes, setExpandedNodes] = useState(new Set());
+  const [visibleNodes, setVisibleNodes] = useState(new Set());
 
   useEffect(() => {
     const getData = async () => {
@@ -103,6 +106,13 @@ const MyGraphComponent = ({ query }) => {
 
   const myConfig = {
     nodeHighlightBehavior: true,
+    collapsible: true,
+    automaticRearrangeAfterDropNode: true,
+    panAndZoom: true,
+    staticGraph: false,
+    focusZoom: 1,
+    maxZoom: 12,
+    minZoom: 0.05,
     node: {
       color: 'lightblue',
       size: 120,
@@ -121,28 +131,54 @@ const MyGraphComponent = ({ query }) => {
     }
   };
 
-
-  const onClickNode = (nodeId) => {
-    console.log(`Clicked node ${nodeId}`);
+  const fetchAncestorsQuery = async (nodeId) => {
+    const session = driver.session();
+    try {
+      const result = await session.run(`
+        MATCH (n {name: $nodeId})<-[:PARENT*]-(ancestor)
+        RETURN ancestor
+      `, { nodeId });
+      const ancestors = result.records.map(record => record.get('ancestor').properties.name);
+      return ancestors;
+    } finally {
+      await session.close();
+    }
   };
 
-  const customLink = (link) => {
-    const { source, target } = link;
-    const path = d3.path();
-    const controlPointX = (source.x + target.x) / 2;
-    const controlPointY = (source.y + target.y) / 2 - 10;
-    path.moveTo(source.x, source.y);
-    path.quadraticCurveTo(controlPointX, controlPointY, target.x, target.y);
+  const onClickNode = async (nodeId) => {
+    const newExpandedNodes = new Set(expandedNodes);
+    if (expandedNodes.has(nodeId)) {
+      newExpandedNodes.delete(nodeId);
+    } else {
+      newExpandedNodes.add(nodeId);
+    }
+    setExpandedNodes(newExpandedNodes);
 
-    return (
-        <path
-            key={`link-${link.source.id}-${link.target.id}`}
-            d={path.toString()}
-            fill="none"
-            stroke="lightblue"
-            strokeWidth={2}
-        />
-    );
+    const updatedVisibleNodes = new Set(visibleNodes);
+    if (!visibleNodes.has(nodeId)) {
+      updatedVisibleNodes.add(nodeId);
+    }
+
+    // Add ancestors of the clicked node to the visible nodes
+    const ancestors = await fetchAncestorsQuery(nodeId);
+    ancestors.forEach(ancestor => updatedVisibleNodes.add(ancestor));
+
+    newExpandedNodes.forEach(expNode => {
+      updatedVisibleNodes.add(expNode);
+    });
+
+    setVisibleNodes(updatedVisibleNodes);
+
+    // Re-fetch the data including the children of the expanded nodes
+    let expandedQuery = `
+      MATCH (n)-[r]->(m)
+      WHERE n.name IN [${Array.from(updatedVisibleNodes).map(n => `'${n}'`).join(', ')}]
+         OR m.name IN [${Array.from(updatedVisibleNodes).map(n => `'${n}'`).join(', ')}]
+      RETURN n, r, m
+    `;
+
+    const graphData = await fetchGraphData(expandedQuery);
+    setData(graphData);
   };
 
   return (
@@ -151,17 +187,17 @@ const MyGraphComponent = ({ query }) => {
             id="graph-id"
             data={data}
             config={myConfig}
-            customLink={customLink}
             width={window.innerWidth}
             height={window.innerHeight}
             onClickNode={onClickNode}
+            collapsible={true}
         />
       </div>
   );
 };
 
 function App() {
-  const defaultQuery = 'MATCH (n)-[r]->(m) RETURN n, r, m';
+  const defaultQuery = 'MATCH (n:Document)-[r]->(m:L0) RETURN n, r, m';
   const [query, setQuery] = useState(defaultQuery);
   const [inputQuery, setInputQuery] = useState(defaultQuery);
 
