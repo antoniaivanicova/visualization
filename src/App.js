@@ -10,6 +10,9 @@ const MyGraphComponent = ({ query }) => {
       neo4j.auth.basic('neo4j', 'node1234')
   );
 
+  const colors = ["#644117", "#665e54", "#7eb6ff", "#7eb297", "#832b38", "#808080", "magenta", "yellow"];
+  const colorMap = new Map();
+
   const fetchGraphData = async (query) => {
     const session = driver.session();
     try {
@@ -17,6 +20,7 @@ const MyGraphComponent = ({ query }) => {
       const nodesMap = new Map();
       const links = [];
       const levels = new Map();
+      const l0Groups = new Map();
 
       result.records.forEach((record) => {
         const sourceNode = record.get('n').properties;
@@ -39,13 +43,26 @@ const MyGraphComponent = ({ query }) => {
           nodesMap.set(sourceName, { id: sourceName, level: levels.get(sourceName), ...sourceNode });
           nodesMap.set(targetName, { id: targetName, level: levels.get(targetName), ...targetNode });
 
-
           links.push({
             source: sourceName,
             target: targetName,
             label: relationship.type,
             strokeWidth: thickness
           });
+
+          if (levels.get(sourceName) === 0) {
+            if (!l0Groups.has(sourceName)) {
+              l0Groups.set(sourceName, new Set());
+            }
+            l0Groups.get(sourceName).add(targetName);
+          } else {
+            for (let [l0Node, group] of l0Groups) {
+              if (group.has(sourceName) || l0Node === sourceName) {
+                group.add(targetName);
+                break;
+              }
+            }
+          }
         } else {
           if (!levels.has(sourceName)) {
             levels.set(sourceName, 0);
@@ -54,20 +71,34 @@ const MyGraphComponent = ({ query }) => {
         }
       });
 
-      console.log(links)
-
       const nodes = Array.from(nodesMap.values());
-      return { nodes, links };
+      const l0GroupsArray = Array.from(l0Groups.entries()).map(([key, value]) => ({ l0Node: key, group: Array.from(value) }));
+
+      l0GroupsArray.forEach((group, index) => {
+        const color = colors[index % colors.length];
+        colorMap.set(group.l0Node, color);
+        group.group.forEach(node => {
+          colorMap.set(node, color);
+        });
+      });
+
+      // apply colors based on groups to nodes
+      nodes.forEach(node => {
+        if (node.level !== 0) {
+          node.color = colorMap.get(node.id) || 'grey';
+        }
+      });
+
+      return { nodes, links, l0Groups: l0GroupsArray };
     } catch (error) {
       console.error('Error fetching data from Neo4j', error);
-      return { nodes: [], links: [] };
+      return { nodes: [], links: [], l0Groups: [] };
     } finally {
       await session.close();
     }
   };
 
-
-  const [data, setData] = useState({ nodes: [], links: [] });
+  const [data, setData] = useState({ nodes: [], links: [], l0Groups: [] });
   const [expandedNodes, setExpandedNodes] = useState(new Set());
   const [visibleNodes, setVisibleNodes] = useState(new Set());
 
@@ -79,21 +110,20 @@ const MyGraphComponent = ({ query }) => {
     getData();
   }, [query]);
 
-  console.log(data.links)
   const getCustomLayout = () => {
     const layout = d3Force.forceSimulation()
         .force('charge', d3Force.forceManyBody().strength(d => {
           if (d.level === 'L1') {
             return -300;
           } else if (d.level === 'L2') {
-            return -200;
+            return -500;
           } else {
             return -600;
           }
         }))
         .force('center', d3Force.forceCenter(window.innerWidth / 2, window.innerHeight / 2))
-        .force('link', d3Force.forceLink().id(d => d.id).distance(300))
-        .force('collide', d3Force.forceCollide().radius(40))
+        .force('link', d3Force.forceLink().id(d => d.id).distance(200))
+        .force('collide', d3Force.forceCollide().radius(30))
         .force('cluster', (alpha) => {
           data.nodes.forEach(node => {
             if (node.level === 'L2') {
@@ -122,16 +152,16 @@ const MyGraphComponent = ({ query }) => {
     maxZoom: 12,
     minZoom: 0.05,
     node: {
-      //todo: change the colors of the nodes
-      color: 'red',
       size: 120,
-      highlightStrokeColor: 'black'
+      highlightStrokeColor: 'black',
+      colorProperty: 'color'
     },
     link: {
       type: "CURVE_SMOOTH",
       highlightColor: 'black',
       labelProperty: 'label',
-      semanticStrokeWidth: true
+      semanticStrokeWidth: true,
+      strokeLinecap: 'round'
     },
     d3: {
       gravity: -100,
@@ -168,7 +198,6 @@ const MyGraphComponent = ({ query }) => {
       updatedVisibleNodes.add(nodeId);
     }
 
-    // Add ancestors of the clicked node to the visible nodes
     const ancestors = await fetchAncestorsQuery(nodeId);
     ancestors.forEach(ancestor => updatedVisibleNodes.add(ancestor));
 
@@ -178,7 +207,6 @@ const MyGraphComponent = ({ query }) => {
 
     setVisibleNodes(updatedVisibleNodes);
 
-    // Re-fetch the data including the children of the expanded nodes
     let expandedQuery = `
       MATCH (n)-[r]->(m)
       WHERE n.name IN [${Array.from(updatedVisibleNodes).map(n => `'${n}'`).join(', ')}]
