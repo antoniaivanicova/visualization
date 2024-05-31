@@ -131,16 +131,12 @@ const MyGraphComponent = ({ query }) => {
       type: "CURVE_SMOOTH",
       highlightColor: 'black',
       labelProperty: 'label',
-      //todo: change thickness based on data
-     // strokeWidth: 'thickness',
       semanticStrokeWidth: true
     },
     d3: {
       gravity: -100,
       linkLength: 50,
       forceSimulation: getCustomLayout(),
-
-
     }
   };
 
