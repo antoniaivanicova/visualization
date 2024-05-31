@@ -39,11 +39,12 @@ const MyGraphComponent = ({ query }) => {
           nodesMap.set(sourceName, { id: sourceName, level: levels.get(sourceName), ...sourceNode });
           nodesMap.set(targetName, { id: targetName, level: levels.get(targetName), ...targetNode });
 
+
           links.push({
             source: sourceName,
             target: targetName,
             label: relationship.type,
-            thickness: thickness
+            strokeWidth: thickness
           });
         } else {
           if (!levels.has(sourceName)) {
@@ -52,6 +53,8 @@ const MyGraphComponent = ({ query }) => {
           nodesMap.set(sourceName, { id: sourceName, level: levels.get(sourceName), ...sourceNode });
         }
       });
+
+      console.log(links)
 
       const nodes = Array.from(nodesMap.values());
       return { nodes, links };
@@ -62,6 +65,7 @@ const MyGraphComponent = ({ query }) => {
       await session.close();
     }
   };
+
 
   const [data, setData] = useState({ nodes: [], links: [] });
   const [expandedNodes, setExpandedNodes] = useState(new Set());
@@ -105,8 +109,6 @@ const MyGraphComponent = ({ query }) => {
     return layout;
   };
 
-  //todo: change thickness
-  //todo: change the colors of the graph -> based on a category
   const myConfig = {
     nodeHighlightBehavior: true,
     highlightOpacity: 0.2,
@@ -120,21 +122,25 @@ const MyGraphComponent = ({ query }) => {
     maxZoom: 12,
     minZoom: 0.05,
     node: {
+      //todo: change the colors of the nodes
       color: 'red',
       size: 120,
-      highlightStrokeColor: 'blue'
+      highlightStrokeColor: 'black'
     },
     link: {
       type: "CURVE_SMOOTH",
-      highlightColor: 'darkblue',
+      highlightColor: 'black',
       labelProperty: 'label',
-      //strokeWidth: 1,
+      //todo: change thickness based on data
+     // strokeWidth: 'thickness',
       semanticStrokeWidth: true
     },
     d3: {
       gravity: -100,
       linkLength: 50,
-      forceSimulation: getCustomLayout()
+      forceSimulation: getCustomLayout(),
+
+
     }
   };
 
